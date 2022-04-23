@@ -2,6 +2,8 @@
 
 View your Directus Api documentation within the App.
 
+Documentation is based on the permissions for the current user.
+
 ![ApiViewer](./screenshots/ApiViewer.gif "ApiViewer")
 
 
