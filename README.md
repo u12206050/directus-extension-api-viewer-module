@@ -7,7 +7,7 @@ View your Directus Api documentation within the App.
 
 ## Installation
 
- - Download latest published [release]()
+ - Download the latest [release](https://github.com/u12206050/directus-extension-api-viewer-module/releases/latest)
  - Unzip and move `index.js` to `[YOUR_PROJECT]/extensions/modules/api-viewer/index.js`
 
 ## Shoutout
