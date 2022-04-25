@@ -21,6 +21,11 @@ onMounted(async () => {
     container.value.loadSpec(data);
   })
 })
+
+const mode = ref('light')
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+  mode.value = event.matches ? 'dark' : 'light';
+});
 </script>
 
 <template>
@@ -32,7 +37,7 @@ onMounted(async () => {
         style="height:100vh; width:100%"
 
         show-header="false"
-        theme="dark"
+        :theme="mode"
         bg-color="#161b22"
         primary-color="#8866ff"
     ></rapi-doc>
@@ -41,6 +46,6 @@ onMounted(async () => {
 
 <style>
 .api-viewer #navigation .module-nav, .api-viewer #sidebar {
-    display: none !important;
+  display: none !important;
 }
 </style>
