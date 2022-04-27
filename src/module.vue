@@ -9,9 +9,17 @@ const userStore = useUserStore()
 
 const container = ref(null)
 const schema = ref('')
+const token = ref('')
 onMounted(async () => {
   console.log(userStore)
   const { data } = await api.get('/server/specs/oas')
+
+  //Retrieve token from user
+  const me = await api.get('/users/me', {params: {fields: 'token'}})
+  if(me.data?.data?.token){
+    token.value  = `Bearer ${me.data.data.token}`;
+  }
+
   nextTick(() => {
     delete(data.paths['/extensions/displays'])
     delete(data.paths['/extensions/interfaces'])
@@ -40,6 +48,9 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', eve
         :theme="mode"
         bg-color="#161b22"
         primary-color="#8866ff"
+        api-key-name="Authorization"
+        api-key-location="header"
+        :api-key-value=token
     ></rapi-doc>
   </private-view>
 </template>
