@@ -1,11 +1,9 @@
 <script setup>
-import {nextTick, onMounted, onUnmounted, ref} from "vue";
-import {useApi, useStores} from "@directus/extensions-sdk";
+import {computed, nextTick, onMounted, onUnmounted, ref} from "vue";
+import {useApi} from "@directus/extensions-sdk";
 import 'rapidoc';
 
 const api = useApi()
-const { useUserStore } = useStores()
-const userStore = useUserStore()
 
 const container = ref(null)
 const schema = ref('')
@@ -13,12 +11,15 @@ const schema = ref('')
 const token = ref('')
 let reloadToken;
 
+function setToken() {
+  token.value = api.defaults.headers.common['Authorization']
+}
+
 onMounted(async () => {
   const { data } = await api.get('/server/specs/oas')
 
-  reloadToken = setInterval(() => {
-    token.value = api.defaults.headers.common['Authorization']
-  }, 10000)
+  reloadToken = setInterval(setToken, 10000)
+  setToken()
 
   nextTick(() => {
     delete(data.paths['/extensions/displays'])
@@ -34,10 +35,32 @@ onUnmounted(() => {
   clearInterval(reloadToken)
 })
 
-const mode = ref('light')
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
+const mode = ref(colorScheme.matches ? 'dark' : 'light')
+
+colorScheme.addEventListener('change', event => {
   mode.value = event.matches ? 'dark' : 'light';
 });
+
+const colors = computed(() => {
+  if (mode.value === 'dark') {
+    return {
+      bg: '#161b22',
+      text: '#ffffff',
+      primary: '#8866ff',
+      navBg: '#21262e',
+      navText: '#ffffff',
+    }
+  } else {
+    return {
+      bg: '#ffffff',
+      text: '#21262e',
+      primary: '#8866ff',
+      navBg: '#f0f4f9',
+      navText: '#161b22',
+    }
+  }
+})
 </script>
 
 <template>
@@ -46,12 +69,14 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', eve
         ref="container"
         allow-try="true"
         render-style="read"
-        style="height:100vh; width:100%"
+        style="height:100%; width:100%"
 
         show-header="false"
         :theme="mode"
-        bg-color="#161b22"
-        primary-color="#8866ff"
+        :bg-color="colors.bg"
+        :primary-color="colors.primary"
+        :nav-bg-color="colors.navBg"
+        :nav-text-color="colors.navText"
 
         api-key-name="Authorization"
         api-key-location="header"
