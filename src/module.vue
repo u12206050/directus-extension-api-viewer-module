@@ -1,5 +1,5 @@
 <script setup>
-import {nextTick, onMounted, ref} from "vue";
+import {nextTick, onMounted, onUnmounted, ref} from "vue";
 import {useApi, useStores} from "@directus/extensions-sdk";
 import 'rapidoc';
 
@@ -9,9 +9,17 @@ const userStore = useUserStore()
 
 const container = ref(null)
 const schema = ref('')
+
+const token = ref('')
+let reloadToken;
+
 onMounted(async () => {
-  console.log(userStore)
   const { data } = await api.get('/server/specs/oas')
+
+  reloadToken = setInterval(() => {
+    token.value = api.defaults.headers.common['Authorization']
+  }, 10000)
+
   nextTick(() => {
     delete(data.paths['/extensions/displays'])
     delete(data.paths['/extensions/interfaces'])
@@ -20,6 +28,10 @@ onMounted(async () => {
 
     container.value.loadSpec(data);
   })
+})
+
+onUnmounted(() => {
+  clearInterval(reloadToken)
 })
 
 const mode = ref('light')
@@ -40,6 +52,10 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', eve
         :theme="mode"
         bg-color="#161b22"
         primary-color="#8866ff"
+
+        api-key-name="Authorization"
+        api-key-location="header"
+        :api-key-value=token
     ></rapi-doc>
   </private-view>
 </template>
