@@ -10,15 +10,15 @@
 		"type": "module",
 		"path": "dist/index.js",
 		"source": "src/index.js",
-		"host": "^9.9.1"
+		"host": "^9.22.1"
 	},
 	"scripts": {
-		"dev": "directus-extension build -w --no-minify --sourcemap -o ../../../extensions/modules/api-viewer/index.js",
-		"build": "directus-extension build -o ../../../extensions/modules/api-viewer/index.js",
-		"release": "directus-extension build -o ./dist/index.js"
+		"dev": "directus-extension build -w --no-minify --sourcemap",
+		"build": "directus-extension build",
+		"release": "npx rimraf ./dist && directus-extension build -t module -i src/index.js -o ./dist/index.js"
 	},
 	"devDependencies": {
-		"@directus/extensions-sdk": "9.9.1",
+		"@directus/extensions-sdk": "^9.22.1",
 		"vue": "^3.2.31"
 	},
 	"dependencies": {
