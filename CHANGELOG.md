@@ -1,3 +1,8 @@
+### 1.2.3
+
+ - Added options to toggle Directus and "Items" prefix
+ - Added input to update auth token used in request
+
 #### 1.1.1
 
 Improve dark and light mode scheme
