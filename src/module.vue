@@ -1,7 +1,7 @@
 <script setup>
 import { useApi } from "@directus/extensions-sdk";
 import 'rapidoc';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 const api = useApi()
 
@@ -9,7 +9,8 @@ const loading = ref('')
 const container = ref(null)
 const schema = ref('')
 const downloadSchema = ref('')
-const exclude_directus = ref(false)
+const incl_directus = ref(true)
+const incl_items = ref(true)
 
 const token = ref('')
 function getTokenFromHeader() {
@@ -23,37 +24,43 @@ async function fetchSchema() {
       'Authorization': `${token.value}`
     }
   })
-  loading.value = 'Parsing schema...';
-  nextTick(() => schema.value = data)
+  
+  schema.value = data;
 }
 
 onMounted(() => {
   loading.value = 'Starting up...';
   getTokenFromHeader()
-  fetchSchema()
 })
 
 // Watch and debounce the token value changing before calling the fetchSchema
 let reloadToken;
-watch(token, () => {
+watch(token, (T) => {
   clearInterval(reloadToken)
+  if (!T) return;
+
   reloadToken = setTimeout(() => {
     fetchSchema()
   }, 1000)
-})
+}, { immediate: true })
 onUnmounted(() => {
   clearInterval(reloadToken)
 })
 
-watch([schema, exclude_directus], ([schemaSpec, exclude]) => {
-  const loadSchema = transformSchema(schemaSpec, exclude)
+let debounceParsing;
+watch([schema, incl_directus, incl_items], ([schemaSpec, incl_directus, incl_items]) => {
+  loading.value = 'Parsing schema...';
+  clearTimeout(debounceParsing)
+  debounceParsing = setTimeout(() => {
+    const loadSchema = transformSchema(schemaSpec)
 
-  if (loadSchema) {
-    downloadSchema.value = 'data:application/json;charset=utf-8, ' + encodeURIComponent(JSON.stringify(loadSchema, null, 2));
-    container.value.loadSpec(loadSchema);
-  }
+    if (loadSchema) {
+      downloadSchema.value = 'data:application/json;charset=utf-8, ' + encodeURIComponent(JSON.stringify(loadSchema, null, 2));
+      container.value.loadSpec(loadSchema);
+    }
 
-  loading.value = '';
+    loading.value = '';
+  }, 50);
 })
 
 const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
@@ -88,10 +95,10 @@ function formatLabel(str) {
   return str.replace(camelToSpaced, '$1$4 $2$3$5')
 }
 
-function transformSchema(schemaSpec, exclude = false) {
+function transformSchema(schemaSpec) {
   if (!schemaSpec) return;
   schemaSpec = JSON.parse(JSON.stringify(schemaSpec))
-  if (exclude) {
+  if (!incl_directus.value) {
     if (schemaSpec.servers[0]?.url.includes('localhost') || schemaSpec.servers[0]?.url.includes('0.0.0.0')) {
       schemaSpec.servers[0].url = location.origin
     }
@@ -102,7 +109,7 @@ function transformSchema(schemaSpec, exclude = false) {
 
     schemaSpec.tags = schemaSpec.tags.filter(tag => {
       if (tag.name.startsWith('Items')) {
-        tag.name = formatLabel(tag.name.replace(/^Items/, ''))
+        tag.name = formatLabel(incl_items.value ? tag.name : tag.name.replace(/^Items/, ''))
         return true;
       }
     });
@@ -114,7 +121,9 @@ function transformSchema(schemaSpec, exclude = false) {
         newPaths[path.replace(/^\/items/, '')] = pathInfo
         for (const method in pathInfo) {
           // remove the tag "Items" from the path [method].tags and remove the prefix "Items" from the tags
-          pathInfo[method].tags = pathInfo[method].tags.filter(tag => tag !== 'Items').map(tag => formatLabel(tag.replace(/^Items/, '')))
+          pathInfo[method].tags = pathInfo[method].tags.filter(tag => tag !== 'Items').map(tag => {
+            return formatLabel(incl_items.value ? tag : tag.replace(/^Items/, ''))
+          })
 
           const operationId = pathInfo[method].operationId
           const summary = operationId.replace(/^createItems/, 'Create ')
@@ -134,12 +143,12 @@ function transformSchema(schemaSpec, exclude = false) {
     schemaSpec.paths = newPaths;
   } else {
     schemaSpec.tags.forEach(tag => {
-      tag.name = formatLabel(tag.name)  
+      tag.name = formatLabel(incl_items.value ? tag.name : tag.name.replace(/^Items/, ''))
     });
     for (const path in schemaSpec.paths) {
       const pathInfo = schemaSpec.paths[path]
       for (const method in pathInfo) {
-        pathInfo[method].tags = pathInfo[method].tags.map(tag => formatLabel(tag))
+        pathInfo[method].tags = pathInfo[method].tags.map(tag => formatLabel(incl_items.value ? tag : tag.replace(/^Items/, '')))
       }
     }
   }
@@ -151,9 +160,23 @@ function transformSchema(schemaSpec, exclude = false) {
 <template>
   <private-view title="API Viewer" small-header class="api-viewer">
 
-    <template #title-outer:append>
-			<label for="exclude" style="margin: 0 16px;"><input type="checkbox" v-model="exclude_directus" id="exclude" /> Exclude Directus Stuff</label>
+    <template #title-outer:append>			
       <v-button style="margin: 0 16px;" x-small outlined download="schema.json" :href="downloadSchema">Download Schema</v-button>
+
+      <v-menu show-arrow placement="bottom-end">
+				<template #activator="{ toggle }">
+					<v-icon v-tooltip="'Toggle options'" name="filter_alt" clickable @click="toggle" />
+				</template>
+
+				<v-list class="monospace">
+					<v-list-item>
+            <v-checkbox v-model="incl_directus" label="Directus Endpoints" />
+					</v-list-item>
+          <v-list-item v-tooltip="`Remove 'items' from url path and title`">
+            <v-checkbox v-model="incl_items" label="Items Prefix" />            
+					</v-list-item>
+				</v-list>
+			</v-menu>
 		</template>
 
     <template #actions:prepend>
@@ -163,11 +186,12 @@ function transformSchema(schemaSpec, exclude = false) {
       </v-button>
     </template>
 
-    <v-notice v-if="loading" center>
-      <v-progress-circular indeterminate />
-      <br/>
-      {{ loading }}
-    </v-notice>
+    <v-info v-if="loading"
+      style="margin 4rem auto; padding: 4rem 0"
+    >
+      <v-progress-circular indeterminate style="margin: 1rem auto;" />
+      <p style="margin: 1rem">{{ loading }}</p>
+    </v-info>
 
     <rapi-doc
       v-if="schema"
