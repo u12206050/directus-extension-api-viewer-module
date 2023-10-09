@@ -118,7 +118,10 @@ function transformSchema(schemaSpec) {
     for (const path in schemaSpec.paths) {
       if (path.startsWith('/items')) {
         const pathInfo = schemaSpec.paths[path]
-        newPaths[path.replace(/^\/items/, '')] = pathInfo
+        if (!incl_items.value) {
+          newPaths[path.replace(/^\/items/, '')] = pathInfo
+        }
+
         for (const method in pathInfo) {
           // remove the tag "Items" from the path [method].tags and remove the prefix "Items" from the tags
           pathInfo[method].tags = pathInfo[method].tags.filter(tag => tag !== 'Items').map(tag => {
