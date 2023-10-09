@@ -6,6 +6,10 @@
 		"directus-extension",
 		"directus-custom-module"
 	],
+	"files": [
+		"dist",
+		"package.json"
+	],
 	"directus:extension": {
 		"type": "module",
 		"path": "dist/index.js",

@@ -9,8 +9,16 @@ Documentation is based on the permissions for the current user.
 
 ## Installation
 
+### Via NPM
+
+ - `npm install directus-extension-api-viewer`
+
+### Manual
  - Download the latest [release](https://github.com/u12206050/directus-extension-api-viewer-module/releases/latest)
  - Unzip and move `index.js` to `[YOUR_PROJECT]/extensions/modules/api-viewer/index.js`
+
+
+Enable the module under Project Settings
 
 ## Shoutout
 
