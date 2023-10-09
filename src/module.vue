@@ -1,31 +1,49 @@
 <script setup>
-import {computed, nextTick, onMounted, onUnmounted, ref, watch} from "vue";
-import {useApi} from "@directus/extensions-sdk";
+import { useApi } from "@directus/extensions-sdk";
 import 'rapidoc';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 const api = useApi()
 
+const loading = ref('')
 const container = ref(null)
 const schema = ref('')
 const downloadSchema = ref('')
-const exclude_directus = ref(true)
+const exclude_directus = ref(false)
 
 const token = ref('')
-let reloadToken;
-
-function setToken() {
+function getTokenFromHeader() {
   token.value = api.defaults.headers.common['Authorization']
 }
 
-onMounted(async () => {
-  const { data } = await api.get('/server/specs/oas')
-
-  reloadToken = setInterval(setToken, 10000)
-  setToken()
-
+async function fetchSchema() {
+  loading.value = 'Fetching schema...';
+  const { data } = await api.get('/server/specs/oas', {
+    headers: {
+      'Authorization': `${token.value}`
+    }
+  })
+  loading.value = 'Parsing schema...';
   nextTick(() => schema.value = data)
+}
+
+onMounted(() => {
+  loading.value = 'Starting up...';
+  getTokenFromHeader()
+  fetchSchema()
 })
 
+// Watch and debounce the token value changing before calling the fetchSchema
+let reloadToken;
+watch(token, () => {
+  clearInterval(reloadToken)
+  reloadToken = setTimeout(() => {
+    fetchSchema()
+  }, 1000)
+})
+onUnmounted(() => {
+  clearInterval(reloadToken)
+})
 
 watch([schema, exclude_directus], ([schemaSpec, exclude]) => {
   const loadSchema = transformSchema(schemaSpec, exclude)
@@ -34,10 +52,8 @@ watch([schema, exclude_directus], ([schemaSpec, exclude]) => {
     downloadSchema.value = 'data:application/json;charset=utf-8, ' + encodeURIComponent(JSON.stringify(loadSchema, null, 2));
     container.value.loadSpec(loadSchema);
   }
-})
 
-onUnmounted(() => {
-  clearInterval(reloadToken)
+  loading.value = '';
 })
 
 const colorScheme = window.matchMedia('(prefers-color-scheme: dark)')
@@ -67,11 +83,15 @@ const colors = computed(() => {
   }
 })
 
+const camelToSpaced = /([A-Z])([A-Z])([a-z])|([a-z])([A-Z])/g;
+function formatLabel(str) {
+  return str.replace(camelToSpaced, '$1$4 $2$3$5')
+}
 
 function transformSchema(schemaSpec, exclude = false) {
   if (!schemaSpec) return;
+  schemaSpec = JSON.parse(JSON.stringify(schemaSpec))
   if (exclude) {
-    schemaSpec = JSON.parse(JSON.stringify(schemaSpec))
     if (schemaSpec.servers[0]?.url.includes('localhost') || schemaSpec.servers[0]?.url.includes('0.0.0.0')) {
       schemaSpec.servers[0].url = location.origin
     }
@@ -80,7 +100,12 @@ function transformSchema(schemaSpec, exclude = false) {
       delete(schemaSpec.components.schemas[key])
     })
 
-    schemaSpec.tags = schemaSpec.tags.filter(tag => tag.name.startsWith('Items') && (tag.name = tag.name.replace(/^Items/, '')))
+    schemaSpec.tags = schemaSpec.tags.filter(tag => {
+      if (tag.name.startsWith('Items')) {
+        tag.name = formatLabel(tag.name.replace(/^Items/, ''))
+        return true;
+      }
+    });
 
     const newPaths = {}
     for (const path in schemaSpec.paths) {
@@ -89,7 +114,7 @@ function transformSchema(schemaSpec, exclude = false) {
         newPaths[path.replace(/^\/items/, '')] = pathInfo
         for (const method in pathInfo) {
           // remove the tag "Items" from the path [method].tags and remove the prefix "Items" from the tags
-          pathInfo[method].tags = pathInfo[method].tags.filter(tag => tag !== 'Items').map(tag => tag.replace(/^Items/, ''))
+          pathInfo[method].tags = pathInfo[method].tags.filter(tag => tag !== 'Items').map(tag => formatLabel(tag.replace(/^Items/, '')))
 
           const operationId = pathInfo[method].operationId
           const summary = operationId.replace(/^createItems/, 'Create ')
@@ -107,6 +132,16 @@ function transformSchema(schemaSpec, exclude = false) {
     }
 
     schemaSpec.paths = newPaths;
+  } else {
+    schemaSpec.tags.forEach(tag => {
+      tag.name = formatLabel(tag.name)  
+    });
+    for (const path in schemaSpec.paths) {
+      const pathInfo = schemaSpec.paths[path]
+      for (const method in pathInfo) {
+        pathInfo[method].tags = pathInfo[method].tags.map(tag => formatLabel(tag))
+      }
+    }
   }
 
   return schemaSpec
@@ -117,12 +152,26 @@ function transformSchema(schemaSpec, exclude = false) {
   <private-view title="API Viewer" small-header class="api-viewer">
 
     <template #title-outer:append>
-			<!--label for="exclude" style="margin: 0 16px;"><input type="checkbox" v-model="exclude_directus" id="exclude" /> Exclude Directus Endpoints</!--label-->
+			<label for="exclude" style="margin: 0 16px;"><input type="checkbox" v-model="exclude_directus" id="exclude" /> Exclude Directus Stuff</label>
       <v-button style="margin: 0 16px;" x-small outlined download="schema.json" :href="downloadSchema">Download Schema</v-button>
 		</template>
 
+    <template #actions:prepend>
+      <v-input v-model="token" placeholder="Bearer token including prefix" small />
+      <v-button  icon small @click="getTokenFromHeader" v-tooltip="'Get current user token'" style="margin: 0 16px;">
+        <v-icon name="refresh" />
+      </v-button>
+    </template>
+
+    <v-notice v-if="loading" center>
+      <v-progress-circular indeterminate />
+      <br/>
+      {{ loading }}
+    </v-notice>
+
     <rapi-doc
-      v-if="token"
+      v-if="schema"
+      v-show="!loading"
       ref="container"
       allow-try="true"
       render-style="read"
@@ -135,7 +184,7 @@ function transformSchema(schemaSpec, exclude = false) {
       :nav-bg-color="colors.navBg"
       :nav-text-color="colors.navText"
 
-      :server-url="curren"
+      :server-url="undefined"
       api-key-name="Authorization"
       api-key-location="header"
       :api-key-value="token"
