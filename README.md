@@ -1,3 +1,7 @@
+# ARCHIVED
+
+Recommend: [directus-extension-rapidocus](https://github.com/Belanchuk/directus-extension-rapidocus)
+
 # Directus Api Viewer Module
 
 View your Directus Api documentation within the App.
